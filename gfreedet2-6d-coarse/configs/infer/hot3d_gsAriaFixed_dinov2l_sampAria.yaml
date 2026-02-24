@@ -1,0 +1,47 @@
+version: "gsAriaFixed_dinov2lreg_18_sampAria"
+repre_version: "gsAriaFixed_dinov2lreg_18"
+object_dataset: hot3d
+object_lids: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33]
+# test_targets_name: "test_targets_bop24.json"
+max_sym_disc_step: 0.01
+
+# Cropping options.
+crop: true
+crop_rel_pad: 0.2
+crop_size: [420, 420]
+
+
+# Object instance options.
+use_detections: true
+detection_path: "local_data/gfreedet2_detections/gfreedet2-2d-sam-p/gfreedet2-2d-sam-p_hot3d-test_ap42d7.json.gz"
+num_preds_factor: 1.0
+min_visibility: 0.1
+
+# Feature extraction options.
+extractor_name: "dinov2_version=vitl14-reg_stride=14_facet=token_layer=18_logbin=0_norm=1"
+grid_cell_size: 14.0
+max_num_queries: 1000000
+
+# Feature matching options.
+match_template_type: "tfidf"
+match_top_n_templates: 5
+match_feat_matching_type: "cyclic_buddies"
+match_top_k_buddies: 300
+
+# PnP options.
+pnp_type: "opencv"
+pnp_ransac_iter: 400
+pnp_required_ransac_conf: 0.99
+pnp_inlier_thresh: 10.0
+pnp_refine_lm: true
+
+final_pose_type: "best_coarse"
+
+# Other options.
+save_estimates: true
+vis_results: true
+vis_freq: 100
+vis_corresp_top_n: 100
+vis_feat_map: true
+vis_for_paper: true
+debug: true

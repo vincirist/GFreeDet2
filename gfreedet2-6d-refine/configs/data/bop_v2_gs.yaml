@@ -1,0 +1,14 @@
+dataloader:
+  _target_: dataloader.bop_v2_gs.BopDatasetV2Gs
+  root_dir: ${machine.root_dir}/bop_datasets/
+  dataset_name:
+  gs_model_tpath:
+
+  is_localization_task: false
+
+  use_default_detections: false
+  detection_path:
+
+  coarse_pose_method:
+  coarse_pose_path:
+

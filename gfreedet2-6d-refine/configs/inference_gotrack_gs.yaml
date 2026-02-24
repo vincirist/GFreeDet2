@@ -1,0 +1,23 @@
+defaults:
+  - user: default
+  - machine: local
+  - callback: base
+  - data: bop_v2_gs
+  - model: gotrack_gs
+  - _self_
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+save_dir: ${machine.root_dir}/gotrack_gs_results/${name_exp}
+mode: pose_refinement
+name_exp: inference_gotrack_gs
+
+# Pose refinement
+dataset_name:
+gs_model_tpath:
+coarse_pose_method:
+coarse_pose_path:
+
+# Pose tracking
+object_name:
+sequence_name:

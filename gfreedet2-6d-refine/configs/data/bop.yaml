@@ -1,0 +1,12 @@
+dataloader:
+  _target_: dataloader.bop.BopDataset
+  root_dir: ${machine.root_dir}/bop_datasets/
+  dataset_name:
+
+  is_localization_task: false
+
+  use_default_detections: false
+  detection_path:
+  
+  coarse_pose_method:
+  coarse_pose_path:

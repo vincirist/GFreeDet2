@@ -1,0 +1,29 @@
+version: "gsFixed"
+overwrite: true  # Set to true to overwrite existing templates
+save_templates: true
+debug: true
+
+model_tpath: "local_data/handal_perspective_crop_fixed/obj_{obj_id:06d}/point_cloud/iteration_10000/point_cloud.ply"
+
+object_dataset: "handal"
+object_lids: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]
+
+
+num_viewspheres: 1
+min_num_viewpoints: 57
+num_inplane_rotations: 14
+images_per_view: 1
+max_num_triangles: 20000
+back_face_culling: false
+texture_size: [1024, 1024]
+
+ssaa_factor: 1.0  # 4.0 is too slow
+
+background_type: "black"
+light_type: "multi_directional"
+features_patch_size: 14
+crop: true
+crop_rel_pad: 0.2
+crop_size: [420, 420]
+
+
