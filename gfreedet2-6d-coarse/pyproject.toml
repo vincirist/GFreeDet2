@@ -1,0 +1,48 @@
+[project]
+name = "gfreedet2-6d-coarse"
+version = "0.1.0"
+description = "GFreeDet2 coarse 6D: templates, descriptors and pose, as an installable package."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy==1.26.4",
+    "scipy",
+    "torch",
+    "torchvision",
+    "torchinfo",
+    "kornia",
+    "scikit-learn",
+    "scikit-image",
+    "faiss-cpu",
+    "opencv-python",
+    "pillow",
+    "imageio",
+    "pypng",
+    "einops",
+    "pytz",
+    "trimesh",
+    "pyrender",
+    "pyglet==2.0.15",
+    "pyopengl",
+    "matplotlib==3.9.0",
+    "tqdm",
+    "pycocotools",
+    "orjson",
+]
+
+[project.optional-dependencies]
+# The splat renderer (`renderer="splat"`). gsplat builds a CUDA extension at first use and needs nvcc.
+splat = ["gsplat==1.5.3", "plyfile"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Top-level packages `utils`, `bop_toolkit_lib` and `dinov2`, as the scripts import them. `dinov2` is the vendored copy.
+[tool.setuptools]
+packages = ["utils", "bop_toolkit_lib", "dinov2", "dinov2.hub", "dinov2.layers", "dinov2.models", "dinov2.utils"]
+
+[tool.setuptools.package-dir]
+dinov2 = "external/dinov2/dinov2"
+
+[tool.setuptools.package-data]
+bop_toolkit_lib = ["colors.json", "*.ttf"]
