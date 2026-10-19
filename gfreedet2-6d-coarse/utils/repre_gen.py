@@ -24,9 +24,9 @@ def extractor_name(layer: int) -> str:
     return f"dinov2_version=vitl14-reg_stride=14_facet=token_layer={layer}_logbin=0_norm=1"
 
 
-def make_extractor(layer: int, device: str = "cuda") -> torch.nn.Module:
-    """The feature extractor. `torch.hub` loads the weights from `$TORCH_HOME/hub/checkpoints`, or downloads them there."""
-    return feature_util.make_feature_extractor(extractor_name(layer)).to(device)
+def make_extractor(layer: int, device: str = "cuda", checkpoint: Optional[str] = None) -> torch.nn.Module:
+    """The feature extractor with the weights of the `checkpoint` file. If `checkpoint` is None, `torch.hub` loads them from `$TORCH_HOME/hub/checkpoints`, or downloads them there."""
+    return feature_util.make_feature_extractor(extractor_name(layer), checkpoint).to(device)
 
 
 def generate_raw_repre(

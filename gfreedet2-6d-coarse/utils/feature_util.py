@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import kornia
 import torch
@@ -14,10 +14,10 @@ from utils import dinov2_utils
 logger: logging_util.Logger = logging_util.get_logger_v2(__name__)
 
 
-def make_feature_extractor(model_name: str) -> torch.nn.Module:
+def make_feature_extractor(model_name: str, checkpoint: Optional[str] = None) -> torch.nn.Module:
 
     if model_name.startswith("dinov2_"):
-        return dinov2_utils.DinoFeatureExtractor(model_name=model_name)
+        return dinov2_utils.DinoFeatureExtractor(model_name=model_name, checkpoint=checkpoint)
     else:
         raise NotImplementedError(model_name)
 

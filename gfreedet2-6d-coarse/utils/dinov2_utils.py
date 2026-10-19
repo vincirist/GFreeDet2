@@ -23,7 +23,7 @@ logger: logging_util.Logger = logging_util.get_logger_v2(__name__)
 
 class DinoFeatureExtractor(nn.Module):
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, checkpoint: Optional[str] = None) -> None:
 
         super().__init__()
 
@@ -57,7 +57,9 @@ class DinoFeatureExtractor(nn.Module):
 
         # Build the base model.
         self.model_base_name: str = f"dinov2_{self.version}".replace("-", "_")
-        self.model: torch.nn.Module = dinov2_backbones.__dict__[self.model_base_name](pretrained=True)
+        self.model: torch.nn.Module = dinov2_backbones.__dict__[self.model_base_name](pretrained=checkpoint is None)
+        if checkpoint is not None:
+            self.model.load_state_dict(torch.load(checkpoint, map_location="cpu"), strict=True)
 
         # Load pre-trained weights.
         # path = _DINOV2_BASE_URL + f"{self.model_base_name}_pretrain.pth"
