@@ -21,7 +21,7 @@ def kmeans(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     # Whether to use GPU.
-    gpu = True if samples.device.type == "cuda" else False
+    gpu = False  # SPIKE PATCH: faiss-cpu (faiss-gpu has no sm_120 kernels)
 
     # Create a k-means object.
     num_dims = samples.shape[1]
