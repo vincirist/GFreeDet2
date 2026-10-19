@@ -1,6 +1,6 @@
 """Templates of one object: `generate_templates`.
 
-Same sampling, crop and file formats as `scripts/gen_templates_gs_v2.py`, with a choice of renderer and no hydra, rootutils or dataset paths.
+Same sampling, crop and image formats as `scripts/gen_templates_gs_v2.py`, with a choice of renderer and no hydra, rootutils or dataset paths. The per-template data of `NNNNNN_K_pose.npy` is returned, not saved.
 """
 
 import os
@@ -23,8 +23,8 @@ RENDERERS = {
 
 
 def template_files(index: int) -> Dict[str, str]:
-    """File names of template `index`: `image` (RGBA), `depth` (uint16, mm) and `K_pose`."""
-    return {"image": f"{index:06d}.png", "depth": f"{index:06d}_depth.png", "K_pose": f"{index:06d}_K_pose.npy"}
+    """File names of template `index`: `image` (RGBA) and `depth` (uint16, mm)."""
+    return {"image": f"{index:06d}.png", "depth": f"{index:06d}_depth.png"}
 
 
 def sample_template_views(num_viewpoints: int, num_inplane_rotations: int, radius: float) -> List[Dict[str, np.ndarray]]:
@@ -68,11 +68,11 @@ def generate_templates(
     ssaa_factor: float = 1.0,
     patch_size: int = 14,
     progress: Optional[Callable] = None,
-) -> int:
-    """Render the templates of one object into `out_dir`; returns their number.
+) -> List[Dict[str, np.ndarray]]:
+    """Render the templates of one object into `out_dir`; returns per template `K`, `height`, `width`, `pose_c_o` and `box_amodal` (the camera is the crop camera).
     - `renderer`: `mesh` (pyrender; `model_path` is a mesh in mm) or `splat` (gsplat; `model_path` is a splat PLY).
     - `image_size` (width, height) and `K` (3x3) are those of the dataset camera. They set the focal length and the render size.
-    - Per template `NNNNNN.png` (RGBA, alpha = mask), `NNNNNN_depth.png` (uint16, mm) and `NNNNNN_K_pose.npy` (pickled dict `K`, `height`, `width`, `pose_c_o`, `box_amodal`; the camera is the crop camera).
+    - Per template `NNNNNN.png` (RGBA, alpha = mask) and `NNNNNN_depth.png` (uint16, mm).
     - `progress` wraps the view iterable, e.g. `tqdm`.
     """
     obj_id = 0
@@ -86,6 +86,7 @@ def generate_templates(
     renderer_obj.add_object_model(obj_id=obj_id, model_path=model_path)
 
     views = sample_template_views(min_num_viewpoints, num_inplane_rotations, radius)
+    templates = []
     try:
         for template_counter, view in enumerate(progress(views) if progress else views):
             trans_m2c = structs.RigidTransform(R=view["R"], t=view["t"])
@@ -174,8 +175,7 @@ def generate_templates(
                 [[camera_model_c2w.f[0], 0, camera_model_c2w.c[0]], [0, camera_model_c2w.f[1], camera_model_c2w.c[1]], [0, 0, 1]],
                 dtype=np.float32,
             )
-            np.save(
-                files["K_pose"],
+            templates.append(
                 {
                     "K": K_save,
                     "height": camera_model_c2w.height,
@@ -188,4 +188,4 @@ def generate_templates(
         pyrender_renderer = getattr(renderer_obj, "renderer", None)
         if pyrender_renderer is not None and hasattr(pyrender_renderer, "delete"):
             pyrender_renderer.delete()
-    return len(views)
+    return templates

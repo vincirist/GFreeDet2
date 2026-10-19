@@ -42,17 +42,19 @@ class Projector:
 
 
 class PCAProjector(Projector):
-    def __init__(self, n_components: int, whiten: bool = False, **kwargs: Dict[str, Any]) -> None:
+    def __init__(self, n_components: int, whiten: bool = False, random_state: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         self.n_components: int = n_components
         self.whiten: bool = whiten
-        self.pca: Any = PCA(n_components=n_components, whiten=whiten)
+        self.pca: Any = PCA(n_components=n_components, whiten=whiten, random_state=random_state)
 
     def fit(self, data_x: torch.Tensor, data_y: Optional[torch.Tensor] = None, **kwargs: Any) -> None:
 
         # Cap the number of feature vectors for PCA fitting.
         if "max_samples" in kwargs:
             if data_x.shape[0] > kwargs["max_samples"]:
-                perm = torch.randperm(data_x.shape[0])
+                # pfod: with kwargs["seed"], a local generator of that seed; else the global one.
+                generator = None if kwargs.get("seed") is None else torch.Generator().manual_seed(kwargs["seed"])
+                perm = torch.randperm(data_x.shape[0], generator=generator)
                 sampled_ids = perm[: kwargs["max_samples"]]
                 data_x = data_x[sampled_ids]
 

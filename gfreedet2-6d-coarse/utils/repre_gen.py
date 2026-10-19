@@ -4,6 +4,8 @@ Same features, PCA, visual words and tf-idf as `scripts/gen_repre_v2.py`, with n
 """
 
 import os
+import random
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -13,6 +15,7 @@ from bop_toolkit_lib import inout
 from utils import cluster_util, feature_util, projector_util, repre_util, template_util
 from utils.misc import array_to_tensor
 from utils.structs import PinholePlaneCameraModel
+from utils.template_gen import template_files
 from utils.transform3d import inverse_se3_numpy
 
 
@@ -27,16 +30,14 @@ def make_extractor(layer: int, device: str = "cuda") -> torch.nn.Module:
 
 
 def generate_raw_repre(
-    template_dir: str, layer: int, extractor: torch.nn.Module, grid_cell_size: float, device: str
+    template_dir: str, templates: List[Dict[str, np.ndarray]], layer: int, extractor: torch.nn.Module, grid_cell_size: float, device: str
 ) -> repre_util.FeatureBasedObjectRepre:
     """Features of every template registered in 3D (the template depth), in the model frame."""
-    K_pose_names = sorted((f for f in os.listdir(template_dir) if f.endswith("_K_pose.npy")), key=lambda x: int(x.split("_")[0]))
     feat_vectors_list, feat_to_vertex_ids_list, vertices_in_model_list = [], [], []
     feat_to_template_ids_list, templates_list, template_cameras_list = [], [], []
 
-    for template_id, K_pose_name in enumerate(tqdm(K_pose_names)):
-        index = int(K_pose_name.split("_")[0])
-        pose_data = np.load(os.path.join(template_dir, K_pose_name), allow_pickle=True).item()
+    for template_id, pose_data in enumerate(tqdm(templates)):
+        files = {name: os.path.join(template_dir, file) for name, file in template_files(template_id).items()}
         K = pose_data["K"]
         camera = PinholePlaneCameraModel(
             width=pose_data["width"],
@@ -45,8 +46,8 @@ def generate_raw_repre(
             c=(K[0, 2], K[1, 2]),
             T_world_from_eye=inverse_se3_numpy(pose_data["pose_c_o"]),
         )
-        image_mask = inout.load_im(os.path.join(template_dir, f"{index:06d}.png"))
-        depth = inout.load_depth(os.path.join(template_dir, f"{index:06d}_depth.png"))
+        image_mask = inout.load_im(files["image"])
+        depth = inout.load_depth(files["depth"])
 
         image_chw = array_to_tensor(image_mask[:, :, :3]).to(torch.float32).permute(2, 0, 1).to(device) / 255.0
         depth_hw = array_to_tensor(depth).to(torch.float32).to(device)
@@ -85,6 +86,7 @@ def generate_raw_repre(
 
 def generate_repre(
     template_dir: str,
+    templates: List[Dict[str, np.ndarray]],
     out_dir: str,
     extractor: torch.nn.Module,
     *,
@@ -95,21 +97,25 @@ def generate_repre(
     pca_max_samples: int = 100000,
     cluster_num: int = 2048,
     tfidf_knn_k: int = 3,
+    seed: Optional[int] = 0,
     device: str = "cuda",
 ) -> None:
     """Compute the descriptors of the templates in `template_dir` and save `repre.pth` into `out_dir`.
+    - `templates` is the list `generate_templates` returns.
     - `extractor` is `make_extractor(layer)`. `layer` only labels it in the file.
+    - `seed` seeds the PCA (sample subset, solver) and the k-means; `None` draws a random seed.
     """
     os.makedirs(out_dir, exist_ok=True)
-    repre = generate_raw_repre(template_dir, layer, extractor, grid_cell_size, device)
+    seed = random.SystemRandom().randrange(2**31) if seed is None else seed
+    repre = generate_raw_repre(template_dir, templates, layer, extractor, grid_cell_size, device)
     feat_vectors = repre.feat_vectors
 
-    pca_projector = projector_util.PCAProjector(n_components=pca_components, whiten=pca_whiten)
-    pca_projector.fit(feat_vectors, max_samples=pca_max_samples)
+    pca_projector = projector_util.PCAProjector(n_components=pca_components, whiten=pca_whiten, random_state=seed)
+    pca_projector.fit(feat_vectors, max_samples=pca_max_samples, seed=seed)
     repre.feat_raw_projectors.append(pca_projector)
     feat_vectors = pca_projector.transform(feat_vectors)
 
-    centroids, cluster_ids, _ = cluster_util.kmeans(samples=feat_vectors, num_centroids=cluster_num, verbose=True)
+    centroids, cluster_ids, _ = cluster_util.kmeans(samples=feat_vectors, num_centroids=cluster_num, verbose=True, seed=seed)
     repre.feat_cluster_centroids = centroids
     repre.feat_to_cluster_ids = cluster_ids
 

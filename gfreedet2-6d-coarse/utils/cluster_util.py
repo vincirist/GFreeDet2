@@ -18,6 +18,7 @@ def kmeans(
     num_centroids: int,
     num_iter: int = 50,
     verbose: bool = True,
+    seed: int = 0,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     # Whether to use GPU.
@@ -31,7 +32,7 @@ def kmeans(
         niter=num_iter,
         gpu=gpu,
         verbose=True,
-        seed=0,
+        seed=seed,
         spherical=False,
     )
 
