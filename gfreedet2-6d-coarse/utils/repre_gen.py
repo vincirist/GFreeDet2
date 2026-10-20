@@ -32,9 +32,9 @@ def make_extractor(layer: int, device: str = "cuda", checkpoint: Optional[str] =
 def generate_raw_repre(
     template_dir: str, templates: List[Dict[str, np.ndarray]], layer: int, extractor: torch.nn.Module, grid_cell_size: float, device: str
 ) -> repre_util.FeatureBasedObjectRepre:
-    """Features of every template registered in 3D (the template depth), in the model frame."""
+    """Features of every template registered in 3D (the template depth), in the model frame. Without the template images (`templates` stays None)."""
     feat_vectors_list, feat_to_vertex_ids_list, vertices_in_model_list = [], [], []
-    feat_to_template_ids_list, templates_list, template_cameras_list = [], [], []
+    feat_to_template_ids_list, template_cameras_list = [], []
 
     for template_id, pose_data in enumerate(tqdm(templates)):
         files = {name: os.path.join(template_dir, file) for name, file in template_files(template_id).items()}
@@ -68,7 +68,6 @@ def generate_raw_repre(
         feat_to_vertex_ids_list.append(feat_to_vertex_ids)
         vertices_in_model_list.append(vertices_in_model)
         feat_to_template_ids_list.append(template_id * torch.ones(feat_vectors.shape[0], dtype=torch.int32, device=device))
-        templates_list.append((image_chw * 255).to(torch.uint8))
         camera_model = camera.copy()
         camera_model.extrinsics = torch.linalg.inv(T_model_from_camera)
         template_cameras_list.append(camera_model)
@@ -79,7 +78,6 @@ def generate_raw_repre(
         feat_opts=repre_util.FeatureOpts(extractor_name=extractor_name(layer)),
         feat_to_vertex_ids=torch.cat(feat_to_vertex_ids_list),
         feat_to_template_ids=torch.cat(feat_to_template_ids_list),
-        templates=torch.stack(templates_list),
         template_cameras_cam_from_model=template_cameras_list,
     )
 
@@ -125,7 +123,7 @@ def generate_repre(
         feat_words=repre.feat_cluster_centroids,
         feat_to_word_ids=repre.feat_to_cluster_ids,
         feat_to_template_ids=repre.feat_to_template_ids,
-        num_templates=len(repre.templates),
+        num_templates=len(templates),
         tfidf_knn_k=repre.template_desc_opts.tfidf_knn_k,
         tfidf_soft_assign=repre.template_desc_opts.tfidf_soft_assign,
         tfidf_soft_sigma_squared=repre.template_desc_opts.tfidf_soft_sigma_squared,

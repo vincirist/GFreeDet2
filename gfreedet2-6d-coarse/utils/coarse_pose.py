@@ -31,7 +31,7 @@ class CoarseObject:
 
 
 def load_object(repre_dir: str) -> CoarseObject:
-    """The `repre.pth` in `repre_dir`, on the CPU, without the template images (only the visualisation reads them), with its knn indices."""
+    """The `repre.pth` in `repre_dir`, on the CPU, with its knn indices. Without the template images: new files have none, old files drop them here (only the visualisation reads them)."""
     repre = repre_util.load_object_repre(repre_dir=repre_dir, tensor_device="cpu")
     repre.templates = None
     visual_words_knn_index = knn_util.KNN(k=repre.template_desc_opts.tfidf_knn_k, metric=repre.template_desc_opts.tfidf_knn_metric)
