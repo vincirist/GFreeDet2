@@ -1,4 +1,4 @@
-"""Coarse 6D pose of one detection: `load_object`, `estimate_coarse_pose`.
+"""Coarse 6D pose of one detection: `load_object`, `prepare_image`, `estimate_coarse_pose`.
 
 Same crop, features, tf-idf template retrieval, cyclic-buddies matching and PnP-RANSAC as `scripts/infer_bop24_v2.py` with `final_pose_type: best_coarse`, with no hydra, rootutils or dataset paths. One detection per call, so the features are not batched over the instances of an image.
 """
@@ -44,6 +44,11 @@ def load_object(repre_dir: str) -> CoarseObject:
     return CoarseObject(repre, visual_words_knn_index, template_knn_indices)
 
 
+def prepare_image(image: np.ndarray) -> np.ndarray:
+    """`image` (HxWx3 uint8 RGB) as float32 in [0, 1]: the `image` of `estimate_coarse_pose`, for all detections of the image."""
+    return image.astype(np.float32) / 255.0
+
+
 @torch.no_grad()
 def estimate_coarse_pose(
     image: np.ndarray,
@@ -65,11 +70,11 @@ def estimate_coarse_pose(
     device: str = "cuda",
 ) -> Optional[Dict[str, Any]]:
     """The coarse pose of one detection in `image`, or None if no template gives a PnP pose.
-    - `image`: HxWx3 uint8 RGB; `K`: 3x3 of the image.
+    - `image`: `prepare_image` of the HxWx3 uint8 RGB image; `K`: 3x3 of the image.
     - `mask_modal`: HxW, nonzero on the visible object; opened with a 3x3 kernel.
     - `box_amodal`: x, y, w, h in pixels (BOP's `bbox`), taken as left, top, left + w, top + h.
     - `obj`: `load_object(...).to(device)`; `extractor`: `make_extractor` of the layer the repre was made with.
-    - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `quality` (PnP inliers of the best template), `template_id`, `times` (seconds per step).
+    - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
     """
     times = {}
     started = time.perf_counter()
@@ -82,7 +87,7 @@ def estimate_coarse_pose(
         box=crop_box, camera_model_c2w=orig_camera_c2w, viewport_size=(crop_size, crop_size), viewport_rel_pad=crop_rel_pad
     )
     interpolation = cv2.INTER_AREA if crop_box.width >= camera_c2w.width else cv2.INTER_LINEAR
-    crop = warp_image(src_camera=orig_camera_c2w, dst_camera=camera_c2w, src_image=image.astype(np.float32) / 255.0, interpolation=interpolation)
+    crop = warp_image(src_camera=orig_camera_c2w, dst_camera=camera_c2w, src_image=image, interpolation=interpolation)
     crop_mask = warp_image(src_camera=orig_camera_c2w, dst_camera=camera_c2w, src_image=mask_modal, interpolation=cv2.INTER_NEAREST)
     times["prep"] = time.perf_counter() - started
 
@@ -119,7 +124,7 @@ def estimate_coarse_pose(
     for corresp_curr in corresp:
         if len(corresp_curr["coord_2d"]) < 6:
             continue
-        success, R_m2c, t_m2c, _, quality = pnp_util.estimate_pose(
+        success, R_m2c, t_m2c, inliers, _ = pnp_util.estimate_pose(
             corresp=corresp_curr,
             camera_c2w=camera_c2w,
             pnp_type="opencv",
@@ -128,8 +133,8 @@ def estimate_coarse_pose(
             pnp_required_ransac_conf=pnp_required_ransac_conf,
             pnp_refine_lm=pnp_refine_lm,
         )
-        if success and (best is None or quality > best["quality"]):
-            best = {"R_m2c": R_m2c, "t_m2c": t_m2c, "quality": quality, "template_id": int(corresp_curr["template_id"])}
+        if success and (best is None or len(inliers) > best["inliers"]):
+            best = {"R_m2c": R_m2c, "t_m2c": t_m2c, "inliers": len(inliers), "matches": len(corresp_curr["coord_2d"]), "template_id": int(corresp_curr["template_id"])}
     times["pnp"] = time.perf_counter() - started
     if best is None:
         return None
