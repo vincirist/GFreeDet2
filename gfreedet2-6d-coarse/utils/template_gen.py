@@ -70,7 +70,7 @@ def generate_templates(
     progress: Optional[Callable] = None,
 ) -> List[Dict[str, np.ndarray]]:
     """Render the templates of one object into `out_dir`; returns per template `K`, `height`, `width`, `pose_c_o` and `box_amodal` (the camera is the crop camera).
-    - `renderer`: `mesh` (pyrender; `model_path` is a mesh in mm) or `splat` (gsplat; `model_path` is a splat PLY).
+    - `renderer`: `mesh` (pyrender; `model_path` is a mesh in mm) or `splat` (gsplat; `model_path` is a splat PLY in mm, any SH degree).
     - `image_size` (width, height) and `K` (3x3) are those of the dataset camera. They set the focal length and the render size.
     - Per template `NNNNNN.png` (RGBA, alpha = mask) and `NNNNNN_depth.png` (uint16, mm).
     - `progress` wraps the view iterable, e.g. `tqdm`.
@@ -82,7 +82,7 @@ def generate_templates(
     if renderer == "mesh":
         renderer_obj = renderer_builder.build(renderer_type=RENDERERS[renderer], model_path=model_path)
     else:
-        renderer_obj = renderer_builder.build(renderer_type=RENDERERS[renderer])
+        renderer_obj = renderer_builder.build(renderer_type=RENDERERS[renderer], model_scale=0.001)
     renderer_obj.add_object_model(obj_id=obj_id, model_path=model_path)
 
     views = sample_template_views(min_num_viewpoints, num_inplane_rotations, radius)

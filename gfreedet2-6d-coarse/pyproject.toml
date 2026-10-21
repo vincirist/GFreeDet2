@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # The splat renderer (`renderer="splat"`). gsplat builds a CUDA extension at first use and needs nvcc.
-splat = ["gsplat==1.5.3", "plyfile"]
+splat = ["gsplat==1.5.3", "plyfile", "easydict"]
 
 [build-system]
 requires = ["setuptools>=68"]
