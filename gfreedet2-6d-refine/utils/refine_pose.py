@@ -65,7 +65,7 @@ def refine_poses(
     height, width = image.shape[:2]
     poses = torch.as_tensor(np.asarray(poses_m2c), dtype=torch.float32)
     images = structs.Collection()
-    images.bitmaps = torch.from_numpy(np.ascontiguousarray(image)).permute(2, 0, 1)[None].float() / 255.0
+    images.bitmaps = torch.from_numpy(np.array(image)).permute(2, 0, 1)[None].float() / 255.0
     images.cameras = [structs.PinholePlaneCameraModel(width=width, height=height, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]), T_world_from_eye=np.eye(4, dtype=np.float32))]
     objects = structs.Collection()
     objects.labels = torch.as_tensor(obj_ids, dtype=torch.int32)

@@ -106,7 +106,7 @@ def load_checkpoint(
     checkpoint_key: str = None,
     prefix: str = "",
 ) -> None:
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
     if checkpoint_key is not None:
         pretrained_dict = checkpoint[checkpoint_key]
     else:
