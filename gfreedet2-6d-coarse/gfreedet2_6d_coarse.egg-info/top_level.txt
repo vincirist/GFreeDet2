@@ -1,3 +1,0 @@
-bop_toolkit_lib
-dinov2
-utils
