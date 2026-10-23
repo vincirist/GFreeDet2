@@ -50,7 +50,11 @@ def adjust_background_color_numpy(color: np.ndarray, mask: np.ndarray, backgroun
     return np.where(mask[..., np.newaxis], color, background_img)
 
 
-def load_gs_from_ply(path, requires_grad: bool = False, max_sh_degree=2, device="cuda"):
+def load_gs_from_ply(path, requires_grad: bool = False, max_sh_degree=None, device="cuda", scale: float = 1.0):
+    """The Gaussians of a splat PLY.
+    - `max_sh_degree`: `None` reads the degree from the `f_rest_*` count.
+    - `scale` multiplies the means and the scales, e.g. 0.001 for a splat in mm (the renderer works in m).
+    """
     plydata = PlyData.read(path)
 
     xyz = np.stack(
@@ -70,6 +74,8 @@ def load_gs_from_ply(path, requires_grad: bool = False, max_sh_degree=2, device=
 
     extra_f_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")]
     extra_f_names = sorted(extra_f_names, key=lambda x: int(x.split("_")[-1]))
+    if max_sh_degree is None:
+        max_sh_degree = round((len(extra_f_names) / 3 + 1) ** 0.5) - 1
     assert len(extra_f_names) == 3 * (max_sh_degree + 1) ** 2 - 3
     features_extra = np.zeros((xyz.shape[0], len(extra_f_names)))
     for idx, attr_name in enumerate(extra_f_names):
@@ -88,6 +94,9 @@ def load_gs_from_ply(path, requires_grad: bool = False, max_sh_degree=2, device=
     rots = np.zeros((xyz.shape[0], len(rot_names)))
     for idx, attr_name in enumerate(rot_names):
         rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
+
+    xyz = xyz * scale
+    scales = scales + np.log(scale)
 
     gs_data = edict()
 
@@ -116,14 +125,17 @@ class GsplatRasterizer(renderer_base.RendererBase):
     def __init__(
         self,
         model_path: Optional[str] = None,
+        model_scale: float = 1.0,
         **kwargs: Any,
     ) -> None:
+        """`model_scale` multiplies the means and scales of every loaded splat, e.g. 0.001 for splats in mm."""
 
         self.object_gaussians: Dict[int, Dict[str, Any]] = {}
 
         self.im_size: Optional[Tuple[int, int]] = None
 
         self.model_path = model_path
+        self.model_scale = model_scale
 
     def get_object_model(
         self,
@@ -133,7 +145,7 @@ class GsplatRasterizer(renderer_base.RendererBase):
 
         object_model_path = self.model_path.format(obj_id=obj_id)
         if obj_id not in self.object_gaussians:
-            gs_data = load_gs_from_ply(object_model_path)
+            gs_data = load_gs_from_ply(object_model_path, scale=self.model_scale)
             sh_features = torch.cat((gs_data.features_dc, gs_data.features_rest), dim=1)
             quats = torch.nn.functional.normalize(gs_data.rotation)
             scales = torch.exp(gs_data.scaling)
@@ -159,7 +171,7 @@ class GsplatRasterizer(renderer_base.RendererBase):
     ) -> None:
 
         if obj_id not in self.object_gaussians:
-            gs_data = load_gs_from_ply(model_path)
+            gs_data = load_gs_from_ply(model_path, scale=self.model_scale)
             sh_features = torch.cat((gs_data.features_dc, gs_data.features_rest), dim=1)
             quats = torch.nn.functional.normalize(gs_data.rotation)
             scales = torch.exp(gs_data.scaling)
@@ -272,15 +284,15 @@ class GsplatRasterizer(renderer_base.RendererBase):
 
         if return_tensors:
             color = rgbd[0, :, :, :3].to(torch.float32)
-            depth = rgbd[0, :, :, 3].to(torch.float32) * 1000.0
             mask = alphas[0, ..., 0] > 0.5
+            depth = rgbd[0, :, :, 3].to(torch.float32) * 1000.0 * mask  # mm, 0 off the mask
             if background is not None:
                 color = adjust_background_color_tensor(color, mask, background)
 
         else:
             color = rgbd[0, :, :, :3].detach().cpu().numpy().astype(np.float32)
-            depth = rgbd[0, :, :, 3].detach().cpu().numpy().astype(np.float32) * 1000.0
             mask = alphas[0, ..., 0].detach().cpu().numpy() > 0.5
+            depth = rgbd[0, :, :, 3].detach().cpu().numpy().astype(np.float32) * 1000.0 * mask  # 0 off the mask, as the mesh renderer
             if background is not None:
                 color = adjust_background_color_numpy(color, mask, background)
 

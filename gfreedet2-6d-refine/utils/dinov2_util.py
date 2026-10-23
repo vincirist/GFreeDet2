@@ -27,7 +27,8 @@ logger = logging_util.get_logger(__name__)
 
 class DinoFeatureExtractor(nn.Module):
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, pretrained: bool = True) -> None:
+        """`pretrained=False` builds the vendored DINOv2 without weights and without a download, e.g. when a checkpoint holds them."""
 
         super().__init__()
 
@@ -61,13 +62,14 @@ class DinoFeatureExtractor(nn.Module):
 
         # Build the base model.
         self.model_base_name: str = f"dinov2_{self.version}".replace("-", "_")
-        self.model: torch.nn.Module = dinov2_backbones.__dict__[self.model_base_name](pretrained=True)
-        try:
-            print(f"loading model from {dinov2_local_repo}")
-            self.model = torch.hub.load(dinov2_local_repo, self.model_base_name, source="local")
-        except Exception as e:
-            print(f"{e}. Loading model from facebookresearch/dinov2")
-            self.model = torch.hub.load("facebookresearch/dinov2", self.model_base_name)
+        self.model: torch.nn.Module = dinov2_backbones.__dict__[self.model_base_name](pretrained=pretrained)
+        if pretrained:
+            try:
+                print(f"loading model from {dinov2_local_repo}")
+                self.model = torch.hub.load(dinov2_local_repo, self.model_base_name, source="local")
+            except Exception as e:
+                print(f"{e}. Loading model from facebookresearch/dinov2")
+                self.model = torch.hub.load("facebookresearch/dinov2", self.model_base_name)
 
         # DINOv2 is trained with stride 14.
         if self.stride != 14:

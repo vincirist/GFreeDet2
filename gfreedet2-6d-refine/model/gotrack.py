@@ -40,8 +40,10 @@ class GoTrack(base.ModelBase):
         opts: Optional[config.GoTrackOpts] = None,
         result_dir: Optional[Path] = None,
         result_file_name: Optional[str] = None,
+        pretrained_backbone: bool = True,
         **kwargs: Dict[str, Any],
     ) -> None:
+        """`pretrained_backbone=False` builds DINOv2 without its weights, for a checkpoint that holds them."""
         super(GoTrack, self).__init__()
         if opts is None:
             opts = config.GoTrackOpts()
@@ -50,7 +52,7 @@ class GoTrack(base.ModelBase):
         self.result_file_name = result_file_name
 
         # Initialize the backbone.
-        self.backbone: torch.nn.Module = dinov2_util.DinoFeatureExtractor(model_name=self.opts.backbone_name)
+        self.backbone: torch.nn.Module = dinov2_util.DinoFeatureExtractor(model_name=self.opts.backbone_name, pretrained=pretrained_backbone)
 
         # Initialize the decoder.
         self.decoder = decoder.Decoder(self.opts.decoder_opts)
