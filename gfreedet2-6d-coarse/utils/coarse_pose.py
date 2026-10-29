@@ -11,8 +11,8 @@ import cv2
 import numpy as np
 import torch
 
-from utils import corresp_util, feature_util, knn_util, misc, pnp_util, projector_util, repre_util, structs
-from utils.misc import array_to_tensor, tensor_to_array, warp_image
+from utils import corresp_util, eval_util, feature_util, knn_util, misc, pnp_util, projector_util, repre_util, structs
+from utils.misc import array_to_tensor, tensor_to_array, tensors_to_arrays, warp_image
 from utils.structs import AlignedBox2f, PinholePlaneCameraModel
 
 
@@ -49,14 +49,6 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
     return image.astype(np.float32) / 255.0
 
 
-def inlier_ratio(corresp: Dict[str, Any], R_m2c: np.ndarray, t_m2c: np.ndarray, camera_c2w: PinholePlaneCameraModel, inlier_thresh: float) -> float:
-    """The share of the matched query points with at least one correspondence that the pose (`camera_c2w` frame) projects within `inlier_thresh` px: the score of `eval_util.EvaluatorPose.update_without_anno`."""
-    points = tensor_to_array(corresp["coord_3d"]) @ R_m2c.T + np.reshape(t_m2c, (1, 3))
-    hits = np.linalg.norm(tensor_to_array(corresp["coord_2d"]) - camera_c2w.eye_to_window(points), axis=1) <= inlier_thresh
-    _, query = np.unique(tensor_to_array(corresp["coord_2d_ids"]), return_inverse=True)
-    return float(np.bincount(query, weights=hits).astype(bool).mean())
-
-
 @torch.no_grad()
 def estimate_coarse_pose(
     image: np.ndarray,
@@ -84,7 +76,7 @@ def estimate_coarse_pose(
     - `box_amodal`: x, y, w, h in pixels (BOP's `bbox`), taken as left, top, left + w, top + h.
     - `obj`: `load_object(...).to(device)`; `extractor`: `make_extractor` of the layer the repre was made with.
     - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `score`, `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
-    - `score`: `inlier_ratio` of the best template's correspondences at the pose, FoundPose's BOP score; `det_score` (the detection's score) if the ratio is 0, as in GFreeDet2's `infer_bop24_v2.py`.
+    - `score`: the BOP score of `eval_util.EvaluatorPose.update_without_anno`, as `infer_bop24_v2.py` gives it: the inlier ratio of the best template's correspondences at the pose, or `det_score` (the detection's score) if it is 0.
     """
     times = {}
     started = time.perf_counter()
@@ -148,10 +140,16 @@ def estimate_coarse_pose(
     times["pnp"] = time.perf_counter() - started
     if best is None:
         return None
-    best["score"] = inlier_ratio(best.pop("corresp"), best["R_m2c"], best["t_m2c"], camera_c2w, pnp_inlier_thresh)
-    if best["score"] < 1e-6:
-        best["score"] = det_score
+    corresp_best = tensors_to_arrays(best.pop("corresp"))
 
     # Crop camera to image camera: the image camera is the world frame.
     trans_m2c = camera_c2w.T_world_from_eye.dot(misc.get_rigid_matrix(structs.ObjectPose(R=best["R_m2c"], t=best["t_m2c"])))
+    # Only `score` is read; the ids and the time are stored by the evaluator.
+    evaluator = eval_util.EvaluatorPose([0])
+    evaluator.update_without_anno(
+        scene_id=0, im_id=0, inst_id=0, hypothesis_id=0, object_repre_vertices=tensor_to_array(obj.repre.vertices), obj_lid=0,
+        object_pose_m2w=structs.ObjectPose(R=trans_m2c[:3, :3], t=trans_m2c[:3, 3:]), orig_camera_c2w=orig_camera_c2w, camera_c2w=camera_c2w,
+        time_per_inst={}, corresp=corresp_best, inlier_radius=pnp_inlier_thresh, det_score=det_score,
+    )
+    best["score"] = float(evaluator.score[-1])
     return {**best, "R_m2c": trans_m2c[:3, :3], "t_m2c": trans_m2c[:3, 3], "times": times}

@@ -27,6 +27,7 @@ dependencies = [
     "tqdm",
     "pycocotools",
     "orjson",
+    "tabulate",
 ]
 
 [project.optional-dependencies]
