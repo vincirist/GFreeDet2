@@ -344,14 +344,14 @@ class GsplatRasterizer(renderer_base.RendererBase):
         times["postprocess"] = time.time()
 
         if return_tensors:
-            color = rgbd[0, :, :, :3].to(torch.float32)
+            color = rgbd[0, :, :, :3].clamp(0.0, 1.0).to(torch.float32)  # SH colour is clamped at 0 only
             mask = alphas[0, ..., 0] > 0.5  # binary mask
             depth = rgbd[0, :, :, 3].to(torch.float32) * 1000.0 * mask  # mm, 0 off the mask
             if background is not None:
                 color = adjust_background_color_tensor(color, mask, background)
 
         else:
-            color = rgbd[0, :, :, :3].detach().cpu().numpy().astype(np.float32)  # 0-1
+            color = rgbd[0, :, :, :3].clamp(0.0, 1.0).detach().cpu().numpy().astype(np.float32)  # 0-1
             mask = alphas[0, ..., 0].detach().cpu().numpy() > 0.5
             depth = rgbd[0, :, :, 3].detach().cpu().numpy().astype(np.float32) * 1000.0 * mask  # 0 off the mask, as the mesh renderer
             if background is not None:
