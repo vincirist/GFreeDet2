@@ -75,6 +75,7 @@ def estimate_coarse_pose(
     pnp_inlier_thresh: float = 10.0,
     pnp_required_ransac_conf: float = 0.99,
     pnp_refine_lm: bool = True,
+    det_score: float = 1.0,
     device: str = "cuda",
 ) -> Optional[Dict[str, Any]]:
     """The coarse pose of one detection in `image`, or None if no template gives a PnP pose.
@@ -83,7 +84,7 @@ def estimate_coarse_pose(
     - `box_amodal`: x, y, w, h in pixels (BOP's `bbox`), taken as left, top, left + w, top + h.
     - `obj`: `load_object(...).to(device)`; `extractor`: `make_extractor` of the layer the repre was made with.
     - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `score`, `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
-    - `score`: `inlier_ratio` of the best template's correspondences at the pose, FoundPose's BOP score.
+    - `score`: `inlier_ratio` of the best template's correspondences at the pose, FoundPose's BOP score; `det_score` (the detection's score) if the ratio is 0, as in GFreeDet2's `infer_bop24_v2.py`.
     """
     times = {}
     started = time.perf_counter()
@@ -148,6 +149,8 @@ def estimate_coarse_pose(
     if best is None:
         return None
     best["score"] = inlier_ratio(best.pop("corresp"), best["R_m2c"], best["t_m2c"], camera_c2w, pnp_inlier_thresh)
+    if best["score"] < 1e-6:
+        best["score"] = det_score
 
     # Crop camera to image camera: the image camera is the world frame.
     trans_m2c = camera_c2w.T_world_from_eye.dot(misc.get_rigid_matrix(structs.ObjectPose(R=best["R_m2c"], t=best["t_m2c"])))
