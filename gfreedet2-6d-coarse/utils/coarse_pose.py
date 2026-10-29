@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from utils import corresp_util, feature_util, knn_util, misc, pnp_util, projector_util, repre_util, structs
-from utils.misc import array_to_tensor, warp_image
+from utils.misc import array_to_tensor, tensor_to_array, warp_image
 from utils.structs import AlignedBox2f, PinholePlaneCameraModel
 
 
@@ -49,6 +49,14 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
     return image.astype(np.float32) / 255.0
 
 
+def inlier_ratio(corresp: Dict[str, Any], R_m2c: np.ndarray, t_m2c: np.ndarray, camera_c2w: PinholePlaneCameraModel, inlier_thresh: float) -> float:
+    """The share of the matched query points with at least one correspondence that the pose (`camera_c2w` frame) projects within `inlier_thresh` px: the score of `eval_util.EvaluatorPose.update_without_anno`."""
+    points = tensor_to_array(corresp["coord_3d"]) @ R_m2c.T + np.reshape(t_m2c, (1, 3))
+    hits = np.linalg.norm(tensor_to_array(corresp["coord_2d"]) - camera_c2w.eye_to_window(points), axis=1) <= inlier_thresh
+    _, query = np.unique(tensor_to_array(corresp["coord_2d_ids"]), return_inverse=True)
+    return float(np.bincount(query, weights=hits).astype(bool).mean())
+
+
 @torch.no_grad()
 def estimate_coarse_pose(
     image: np.ndarray,
@@ -74,7 +82,8 @@ def estimate_coarse_pose(
     - `mask_modal`: HxW, nonzero on the visible object; opened with a 3x3 kernel.
     - `box_amodal`: x, y, w, h in pixels (BOP's `bbox`), taken as left, top, left + w, top + h.
     - `obj`: `load_object(...).to(device)`; `extractor`: `make_extractor` of the layer the repre was made with.
-    - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
+    - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `score`, `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
+    - `score`: `inlier_ratio` of the best template's correspondences at the pose, FoundPose's BOP score.
     """
     times = {}
     started = time.perf_counter()
@@ -134,10 +143,11 @@ def estimate_coarse_pose(
             pnp_refine_lm=pnp_refine_lm,
         )
         if success and (best is None or len(inliers) > best["inliers"]):
-            best = {"R_m2c": R_m2c, "t_m2c": t_m2c, "inliers": len(inliers), "matches": len(corresp_curr["coord_2d"]), "template_id": int(corresp_curr["template_id"])}
+            best = {"R_m2c": R_m2c, "t_m2c": t_m2c, "inliers": len(inliers), "matches": len(corresp_curr["coord_2d"]), "template_id": int(corresp_curr["template_id"]), "corresp": corresp_curr}
     times["pnp"] = time.perf_counter() - started
     if best is None:
         return None
+    best["score"] = inlier_ratio(best.pop("corresp"), best["R_m2c"], best["t_m2c"], camera_c2w, pnp_inlier_thresh)
 
     # Crop camera to image camera: the image camera is the world frame.
     trans_m2c = camera_c2w.T_world_from_eye.dot(misc.get_rigid_matrix(structs.ObjectPose(R=best["R_m2c"], t=best["t_m2c"])))
