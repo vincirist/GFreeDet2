@@ -12,8 +12,9 @@ import numpy as np
 import torch
 
 from utils import corresp_util, eval_util, feature_util, knn_util, misc, pnp_util, projector_util, repre_util, structs
+from utils.camera_util import image_camera
 from utils.misc import array_to_tensor, tensor_to_array, tensors_to_arrays, warp_image
-from utils.structs import AlignedBox2f, PinholePlaneCameraModel
+from utils.structs import AlignedBox2f
 
 
 @dataclasses.dataclass
@@ -58,6 +59,7 @@ def estimate_coarse_pose(
     obj: CoarseObject,
     extractor: torch.nn.Module,
     *,
+    distortion: Optional[Dict[str, Any]] = None,
     crop_size: int = 420,
     crop_rel_pad: float = 0.2,
     grid_cell_size: float = 14.0,
@@ -71,17 +73,17 @@ def estimate_coarse_pose(
     device: str = "cuda",
 ) -> Optional[Dict[str, Any]]:
     """The coarse pose of one detection in `image`, or None if no template gives a PnP pose.
-    - `image`: `prepare_image` of the HxWx3 uint8 RGB image; `K`: 3x3 of the image.
+    - `image`: `prepare_image` of the HxWx3 uint8 RGB image; `K`: 3x3 of the image; `distortion`: its lens distortion, if any (`camera_util.image_camera`).
     - `mask_modal`: HxW, nonzero on the visible object; opened with a 3x3 kernel.
     - `box_amodal`: x, y, w, h in pixels (BOP's `bbox`), taken as left, top, left + w, top + h.
     - `obj`: `load_object(...).to(device)`; `extractor`: `make_extractor` of the layer the repre was made with.
-    - Returns `R_m2c` (3x3), `t_m2c` (3, mm), `score`, `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
+    - Returns `R_m2c` (3x3), `t_m2c` (3, mm) in the image camera, `score`, `inliers` (PnP inliers of the best template), `matches` (its 2D-3D correspondences), `template_id`, `times` (seconds per step).
     - `score`: the BOP score of `eval_util.EvaluatorPose.update_without_anno`, as `infer_bop24_v2.py` gives it: the inlier ratio of the best template's correspondences at the pose, or `det_score` (the detection's score) if it is 0.
     """
     times = {}
     started = time.perf_counter()
     height, width = image.shape[:2]
-    orig_camera_c2w = PinholePlaneCameraModel(width=width, height=height, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]))
+    orig_camera_c2w = image_camera(K, width, height, distortion)
     mask_modal = cv2.morphologyEx(np.asarray(mask_modal != 0, np.uint8), cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
     x, y, w, h = np.asarray(box_amodal, dtype=float)
     crop_box = misc.calc_crop_box(box=AlignedBox2f(left=x, top=y, right=x + w, bottom=y + h), make_square=True)

@@ -3,7 +3,7 @@
 Same crop, render, flow and PnP iterations as `GoTrack.forward_pipeline` (`model/gotrack.py`), with no hydra, lightning trainer, dataloader or result files. The renderer is pyrender for a mesh (GoTrack) or gsplat for a splat (GoTrack-GS).
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -12,6 +12,7 @@ from plyfile import PlyData
 from model import config
 from model.gotrack import GoTrack
 from utils import data_util, net_util, renderer_base, renderer_builder, structs
+from utils.camera_util import image_camera
 
 RENDERERS = {"mesh": renderer_builder.RendererType.PYRENDER_RASTERIZER, "splat": renderer_builder.RendererType.GSPLAT_RASTERIZER}
 #: The render background of each `background` option.
@@ -54,19 +55,20 @@ def refine_poses(
     obj_ids: List[int],
     poses_m2c: np.ndarray,
     vertices: Dict[int, np.ndarray],
+    distortion: Optional[Dict[str, Any]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """The refined poses of the objects in `image`, and their pose scores.
-    - `image`: HxWx3 uint8 RGB; `K`: 3x3 of the image.
+    - `image`: HxWx3 uint8 RGB; `K`: 3x3 of the image; `distortion`: its lens distortion, if any (`camera_util.image_camera`).
     - `obj_ids`: one per pose, each added to `renderer` with `add_object`; `vertices`: `add_object`'s vertices per obj_id.
     - `poses_m2c`: (N, 4, 4) initial poses, model to camera, mm.
-    - Returns the poses (N, 4, 4, mm) and scores (N,) of the last iteration. The score is the PnP inlier share of the flow confidences, in [0, 1]; a failed PnP keeps its input pose with score 0.
+    - Returns the poses (N, 4, 4, mm, in the image camera) and scores (N,) of the last iteration. The score is the PnP inlier share of the flow confidences, in [0, 1]; a failed PnP keeps its input pose with score 0.
     """
     opts = model.opts
     height, width = image.shape[:2]
     poses = torch.as_tensor(np.asarray(poses_m2c), dtype=torch.float32)
     images = structs.Collection()
     images.bitmaps = torch.from_numpy(np.array(image)).permute(2, 0, 1)[None].float() / 255.0
-    images.cameras = [structs.PinholePlaneCameraModel(width=width, height=height, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]), T_world_from_eye=np.eye(4, dtype=np.float32))]
+    images.cameras = [image_camera(K, width, height, distortion)]
     objects = structs.Collection()
     objects.labels = torch.as_tensor(obj_ids, dtype=torch.int32)
     objects.frame_ids = torch.zeros(len(obj_ids), dtype=torch.int32)

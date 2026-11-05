@@ -27,6 +27,7 @@ dependencies = [
     "matplotlib==3.9.0",
     "distinctipy",
     "tqdm",
+    "hand_tracking_toolkit @ git+https://github.com/facebookresearch/hand_tracking_toolkit@c521930d966c871977aaa4d15f33bfd4b3781f09",
 ]
 
 [project.optional-dependencies]
