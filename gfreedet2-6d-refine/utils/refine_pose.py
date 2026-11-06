@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
-from plyfile import PlyData
 
 from model import config
 from model.gotrack import GoTrack
@@ -31,19 +30,19 @@ def load_refiner(checkpoint: str, *, iterations: int = 5, crop_size: int = 280, 
     return model.to(device).eval()
 
 
-def make_renderer(renderer: str) -> renderer_base.RendererBase:
-    """An empty renderer: `mesh` (pyrender, meshes in mm) or `splat` (gsplat, splat PLYs in mm, any SH degree)."""
-    if renderer == "splat":
-        return renderer_builder.build(renderer_type=RENDERERS[renderer], model_scale=0.001)
-    return renderer_builder.build(renderer_type=RENDERERS[renderer])
+def make_renderer(renderer: str, model_scale: float = 0.001) -> renderer_base.RendererBase:
+    """An empty renderer: `mesh` (pyrender) or `splat` (gsplat, splat PLYs, any SH degree); `model_scale` multiplies the loaded models into m, e.g. 0.001 for models in mm."""
+    return renderer_builder.build(renderer_type=RENDERERS[renderer], model_scale=model_scale)
 
 
 def add_object(renderer: renderer_base.RendererBase, obj_id: int, model_path: str, background: str = "gray", seed: int = 0) -> np.ndarray:
-    """Adds the model at `model_path` (PLY, mm) as `obj_id`; returns up to `MAX_VERTICES` of its vertices (mesh) or means (splat), (N, 3) float32 mm, sampled with `seed`."""
+    """Adds the model at `model_path` as `obj_id`; returns up to `MAX_VERTICES` of its vertices (mesh) or means (splat), (N, 3) float32 mm, sampled with `seed`."""
     renderer.add_object_model(obj_id=obj_id, model_path=model_path, background=BACKGROUNDS[background])
-    vertex = PlyData.read(model_path).elements[0]
-    points = np.stack([np.asarray(vertex[axis]) for axis in "xyz"], axis=1)
-    return np.random.default_rng(seed).permutation(points)[:MAX_VERTICES].astype(np.float32)
+    if hasattr(renderer, "object_meshes"):
+        points = np.asarray(renderer.object_meshes[obj_id].vertices)
+    else:
+        points = renderer.object_gaussians[obj_id].xyz.detach().cpu().numpy()
+    return np.random.default_rng(seed).permutation(points * 1000.0)[:MAX_VERTICES].astype(np.float32)
 
 
 @torch.no_grad()

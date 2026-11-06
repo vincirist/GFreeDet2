@@ -41,10 +41,13 @@ class PyrenderRasterizer(renderer_base.RendererBase):
         self,
         renderer_flags: int = pyrender.constants.RenderFlags.NONE,
         model_path: Optional[str] = None,
+        model_scale: float = 0.001,
         **kwargs: Any,
     ) -> None:
+        """`model_scale` multiplies the vertices of every loaded mesh, e.g. 0.001 for meshes in mm."""
 
         self.renderer_flags = renderer_flags
+        self.model_scale = model_scale
 
         # Per-object scene (a special scene is created for each object model).
         self.object_scenes: Dict[int, pyrender.Scene] = {}
@@ -73,8 +76,8 @@ class PyrenderRasterizer(renderer_base.RendererBase):
 
         # Load the object model.
         object_model_path = self.model_path.format(obj_id=obj_id)
-        trimesh_model = trimesh.load(object_model_path)
-        trimesh_model.vertices = trimesh_model.vertices / 1000.0
+        trimesh_model = trimesh.load(object_model_path, force="mesh")
+        trimesh_model.vertices = trimesh_model.vertices * self.model_scale
 
         # Color the model.
         if mesh_color:
@@ -111,8 +114,8 @@ class PyrenderRasterizer(renderer_base.RendererBase):
         if obj_id not in self.object_meshes:
 
             # trimesh_model = trimesh.load(model_path, process=False)
-            trimesh_model = trimesh.load(model_path)
-            trimesh_model.vertices = trimesh_model.vertices / 1000.0
+            trimesh_model = trimesh.load(model_path, force="mesh")
+            trimesh_model.vertices = trimesh_model.vertices * self.model_scale
             # Color the model.
             if mesh_color:
                 num_vertices = trimesh_model.vertices.shape[0]
